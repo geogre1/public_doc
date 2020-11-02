@@ -80,57 +80,21 @@ output.elasticsearch:
 # logstash
 logstash是处理数据的管道 [doc][logstash-doc]
 
-```python
-input {
-   beats {
-     port => 5044 # 监听端口号
-   }
-}
-
-filter {
-    if "spring" in [tags] { # 使用tag作为选择使用处理器的条件
-        grok {
-            match => { "message" => '(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \d{,3})' }
-            # 使用正则把字符串字段拆成多个字段，不符合正则则不处理
-        }
-        date {
-            match => [ "time", "yyyy-MM-dd HH:mm:ss SSS"]
-            # 把指定字段转为时间格式后赋给@timestamp字段，作为这条日志的标准时间
-            timezone => "Asia/Shanghai"
-            # 注意指定时区，不宜修改kibana的时区
-        }
-    }
-}
-
-output {
-    elasticsearch { # 输出es
-       hosts => ["http://172.29.100.168:9200"]
-       index => "filebeat-%{+YYYY.MM.dd}" # 指定输出到es的index
-    }
-}
-```
-执行命令`logstash -f ./logstash.conf`
-
----
-
-或者也可以把conf文件拆开写
 ```
 /etc/logstash/conf.d/
 - 02-beats-input.conf  
 - 10-syslog.conf  
 - 11-nginx.conf  
+- 12-spring.conf
 - 30-output.conf
 ```
 
 02-beats-input.conf
 ```
 input {
-  beats {
-    port => 5044
-    ssl => true
-    ssl_certificate => "/etc/pki/tls/certs/logstash-beats.crt"
-    ssl_key => "/etc/pki/tls/private/logstash-beats.key"
-  }
+   beats {
+     port => 5044 # 监听端口号
+   }
 }
 ```
 10-syslog.conf
@@ -159,17 +123,35 @@ filter {
   }
 }
 ```
+12-spring.conf
+```
+filter {
+    if "spring" in [tags] { # 使用tag作为选择使用处理器的条件
+        grok {
+            match => { "message" => '(?<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} \d{,3})' }
+            # 使用正则把字符串字段拆成多个字段，不符合正则则不处理
+        }
+        date {
+            match => [ "time", "yyyy-MM-dd HH:mm:ss SSS"]
+            # 把指定字段转为时间格式后赋给@timestamp字段，作为这条日志的标准时间
+            timezone => "Asia/Shanghai"
+            # 注意指定时区，不宜修改kibana的时区
+        }
+    }
+}
+```
 30-output.conf
 ```
 output {
-  elasticsearch {
-    hosts => ["localhost"]
-    manage_template => false
-    index => "%{[@metadata][beat]}-%{+YYYY.MM.dd}"
-  }
+    elasticsearch {
+       hosts => ["http://172.29.100.168:9200"]
+       index => "filebeat-%{+YYYY.MM.dd}" # 指定输出到es的index
+    }
 }
 ```
-数据(event)会按照文件名的字母顺序依次通过这些管道
+数据会按照文件名的字母顺序依次通过这些管道
+
+也可以把以上conf合并成一个文件后执行命令`logstash -f ./logstash.conf`
 
 重新加载logstash config `kill -SIGHUP ${pid}`
 
